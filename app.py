@@ -151,6 +151,28 @@ elif step == "Review examples":
     else:
         st.caption("A rule match suggests active. A non-match stays unknown until you review it.")
         labels = [f"{i}: {row['symbol']} at {row['timestamp']} ({row['timeframe_set']})" for i, row in enumerate(rows)]
+        batch_indices = st.multiselect(
+            "Optional: select a batch you have independently reviewed",
+            range(len(rows)),
+            format_func=lambda i: labels[i],
+        )
+        batch_regime = st.selectbox(
+            "Batch regime",
+            config["regimes"],
+            format_func=lambda item: item["name"],
+            key="batch_regime",
+        )
+        batch_label = st.selectbox("Reviewed label for this batch", ["active", "inactive", "unknown"])
+        if st.button("Save batch review", disabled=not batch_indices):
+            for batch_index in batch_indices:
+                target_label = rows[batch_index]["labels"][batch_regime["id"]]
+                rows[batch_index]["labels"][batch_regime["id"]] = {
+                    "value": batch_label,
+                    "source": "user-reviewed",
+                    "strategy_ids": target_label["strategy_ids"],
+                }
+            EXAMPLES_PATH.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
+            st.success(f"Saved a review for {len(batch_indices)} selected examples.")
         index = st.selectbox("Choose an example", range(len(rows)), format_func=lambda i: labels[i])
         row = rows[index]
         st.write(
@@ -169,7 +191,7 @@ elif step == "Review examples":
         if st.button("Save label review"):
             row["labels"][regime["id"]] = {
                 "value": new_label,
-                "source": "user-reviewed" if new_label != "unknown" else "unknown",
+                "source": "user-reviewed",
                 "strategy_ids": current["strategy_ids"],
             }
             EXAMPLES_PATH.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")

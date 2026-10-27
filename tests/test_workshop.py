@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -134,7 +133,10 @@ class DataTests(unittest.TestCase):
             self.assertIn("support_2__return_1", row)
 
     def test_rule_nonmatch_is_unknown_not_inactive(self):
-        rows = [{"anchor__return_1": -0.1}, {"anchor__return_1": 0.1}]
+        rows = [
+            {"timeframe_set": "Set 1", "anchor__return_1": -0.1},
+            {"timeframe_set": "Set 1", "anchor__return_1": 0.1},
+        ]
         config = new_config()
         config["regimes"] = [
             {
@@ -158,6 +160,10 @@ class DataTests(unittest.TestCase):
         result = label_examples(rows, config["regimes"])
         self.assertEqual(result[0]["labels"]["up"]["value"], "unknown")
         self.assertEqual(result[1]["labels"]["up"]["value"], "active")
+        wrong_set = label_examples(
+            [{"timeframe_set": "Set 2", "anchor__return_1": 0.1}], config["regimes"]
+        )
+        self.assertEqual(wrong_set[0]["labels"]["up"]["value"], "unknown")
 
 
 class ModelTests(unittest.TestCase):
@@ -180,12 +186,24 @@ class ModelTests(unittest.TestCase):
             )
             loaded, manifest = load_bundle(bundle)
             input_row = {"anchor__return_1": 3.0}
-            actual = predict(loaded, manifest, input_row)
+            context = {
+                "symbol": "SYNTH",
+                "timestamp": "2024-01-03T00:00:00Z",
+                "timeframe_set": "Set 2",
+            }
+            actual = predict(loaded, manifest, input_row, context)
             expected = bool(models["up"].predict([[3.0]])[0])
             self.assertEqual(actual[0]["status"], "active" if expected else "inactive")
             self.assertIsNone(actual[0]["confidence"])
+            self.assertEqual(actual[0]["symbol"], "SYNTH")
+            self.assertEqual(actual[0]["decision_timestamp"], context["timestamp"])
+            self.assertEqual(actual[0]["supporting_observations"], input_row)
             with self.assertRaisesRegex(ValueError, "Missing observation features"):
-                predict(loaded, manifest, {})
+                predict(loaded, manifest, {}, context)
+            self.assertEqual(
+                predict(loaded, manifest, input_row, {**context, "data_quality_flags": ["stale"]})[0]["status"],
+                "unavailable",
+            )
             with self.assertRaises(FileExistsError):
                 export_bundle(models, config, report, ["anchor__return_1"], bundle, rows)
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import math
+from bisect import bisect_right
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -22,6 +23,10 @@ TIMEFRAME_MINUTES = {
 }
 REQUIRED_COLUMNS = {"symbol", "timeframe", "timestamp", "open", "high", "low", "close", "volume"}
 FEATURE_NAMES = ("return_1", "body_fraction", "upper_wick_fraction", "lower_wick_fraction", "range_fraction")
+TIMEFRAME_SET_FEATURES = {
+    name: f"timeframe_set__{name.lower().replace(' ', '_')}"
+    for name in TIMEFRAME_SETS
+}
 
 
 def read_ohlcv_csv(source: str | Path | Iterable[str], timestamp_convention: str = "close") -> list[dict[str, Any]]:
@@ -96,7 +101,7 @@ def feature_names_for_set(timeframe_set: str) -> list[str]:
         f"{role}__{feature}"
         for role in ("anchor", "support_1", "support_2")
         for feature in FEATURE_NAMES
-    ]
+    ] + list(TIMEFRAME_SET_FEATURES.values())
 
 
 def _candle_features(current: dict[str, Any], previous: dict[str, Any] | None) -> dict[str, float] | None:
@@ -133,7 +138,7 @@ def align_timeframes(bars: list[dict[str, Any]], timeframe_set: str) -> list[dic
             series = grouped.get((symbol, support_tf), [])
             if len(series) < 2:
                 missing = True
-            supports.append(series)
+            supports.append((series, [bar["timestamp"] for bar in series]))
         if missing:
             continue
         for anchor_index, anchor in enumerate(anchors):
@@ -148,20 +153,25 @@ def align_timeframes(bars: list[dict[str, Any]], timeframe_set: str) -> list[dic
                 "timeframe_set": timeframe_set,
                 "quality_flags": [],
             }
+            result.update(
+                {feature: float(timeframe_set == name) for name, feature in TIMEFRAME_SET_FEATURES.items()}
+            )
             result.update({f"anchor__{name}": value for name, value in anchor_features.items()})
             supports_ok = True
-            for role, support_tf, series in zip(("support_1", "support_2"), (support_1_tf, support_2_tf), supports):
-                available = [bar for bar in series if bar["timestamp"] <= anchor["timestamp"]]
-                if len(available) < 2:
+            for role, support_tf, (series, timestamps) in zip(
+                ("support_1", "support_2"), (support_1_tf, support_2_tf), supports
+            ):
+                position = bisect_right(timestamps, anchor["timestamp"])
+                if position < 2:
                     supports_ok = False
                     break
-                current = available[-1]
+                current = series[position - 1]
                 age = anchor["timestamp"] - current["timestamp"]
                 max_age = timedelta(minutes=TIMEFRAME_MINUTES[support_tf] + TIMEFRAME_MINUTES[anchor_tf])
                 if age < timedelta(0) or age > max_age:
                     supports_ok = False
                     break
-                features = _candle_features(current, available[-2])
+                features = _candle_features(current, series[position - 2])
                 if features is None:
                     supports_ok = False
                     break
@@ -211,7 +221,8 @@ def label_examples(
             matched = [
                 strategy["id"]
                 for strategy in regime["strategies"]
-                if strategy_matches(strategy, example)
+                if strategy["timeframe_set"] == example["timeframe_set"]
+                and strategy_matches(strategy, example)
             ]
             row["labels"][regime["id"]] = {
                 "value": "active" if matched else "unknown",

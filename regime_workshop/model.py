@@ -190,7 +190,30 @@ def load_bundle(path: str | Path) -> tuple[dict[str, Any], dict[str, Any]]:
     return models, manifest
 
 
-def predict(models: dict[str, Any], manifest: dict[str, Any], observations: dict[str, Any]) -> list[dict[str, Any]]:
+def predict(
+    models: dict[str, Any],
+    manifest: dict[str, Any],
+    observations: dict[str, Any],
+    context: dict[str, Any],
+) -> list[dict[str, Any]]:
+    symbol = context.get("symbol")
+    timestamp = context.get("timestamp")
+    timeframe_set = context.get("timeframe_set")
+    quality_flags = context.get("data_quality_flags", [])
+    if not isinstance(symbol, str) or not symbol.strip():
+        raise ValueError("Prediction context needs a symbol.")
+    if not isinstance(timestamp, str):
+        raise ValueError("Prediction context needs a timezone-aware timestamp.")
+    try:
+        parsed_timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        raise ValueError("Prediction timestamp must be ISO 8601 with a timezone.") from None
+    if parsed_timestamp.tzinfo is None or parsed_timestamp.utcoffset() is None:
+        raise ValueError("Prediction timestamp must include a timezone.")
+    if not isinstance(timeframe_set, str) or timeframe_set not in {"Set 1", "Set 2", "Set 3", "Set 4"}:
+        raise ValueError("Prediction context needs an official timeframe set.")
+    if not isinstance(quality_flags, list) or any(not isinstance(flag, str) for flag in quality_flags):
+        raise ValueError("Data-quality flags must be a list of text values.")
     feature_names = manifest["feature_names"]
     missing = [name for name in feature_names if name not in observations]
     if missing:
@@ -203,15 +226,24 @@ def predict(models: dict[str, Any], manifest: dict[str, Any], observations: dict
         values.append(float(value))
     reports = []
     for regime_id, estimator in models.items():
-        active = bool(estimator.predict([values])[0])
+        supported_sets = manifest.get("timeframe_sets", {}).get(regime_id, [])
+        unsupported_set = timeframe_set not in supported_sets
+        unavailable = bool(quality_flags) or unsupported_set
+        active = bool(estimator.predict([values])[0]) if not unavailable else None
         reports.append(
             {
                 "model_id": manifest["model_id"],
+                "symbol": symbol,
+                "decision_timestamp": parsed_timestamp.isoformat().replace("+00:00", "Z"),
+                "timeframe_set": timeframe_set,
                 "regime_id": regime_id,
                 "regime_name": manifest["labels"].get(regime_id, regime_id),
-                "status": "active" if active else "inactive",
+                "status": "unavailable" if unavailable else ("active" if active else "inactive"),
                 "confidence": None,
                 "confidence_note": "No calibrated probability is available.",
+                "supporting_observations": {name: observations[name] for name in feature_names},
+                "data_quality_flags": list(quality_flags)
+                + (["timeframe set not configured for this regime"] if unsupported_set else []),
             }
         )
     return reports
