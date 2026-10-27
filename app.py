@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 import streamlit as st
 
@@ -243,12 +244,10 @@ elif step == "Export":
     if not models or not report:
         st.info("Train at least one regime first.")
     else:
-        default_name = "regime-model-" + datetime.now().strftime("%Y%m%d-%H%M%S")
-        bundle_name = st.text_input("New bundle name", value=default_name)
+        bundle_name = f"regime-model-{datetime.now():%Y%m%d-%H%M%S}-{uuid4().hex[:8]}"
+        st.write(f"New bundle ID: `{bundle_name}`")
         if st.button("Export bundle"):
             try:
-                if not bundle_name.strip() or Path(bundle_name).name != bundle_name:
-                    raise ValueError("Use a simple new bundle name without folders.")
                 destination = WORKSPACE / "exports" / bundle_name
                 target = export_bundle(
                     models,
