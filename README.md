@@ -1,61 +1,67 @@
-# Regime Model Workshop
+# -Trading-with-Machine-Learning-Classification-and-SVM
 
-This repository is a local model-building workshop inspired by the QuantInsti
-Quantra course, [Trading with Machine Learning: Classification and SVM](https://quantra.quantinsti.com/course/trading-machine-learning-classification-svm).
-The checkout contains only this short course-description README; no notebooks,
-scripts, doctrine files, datasets, or licenses from the course were supplied.
-Accordingly, this project does not claim to reuse or redistribute course
-materials.
+## Project mission
+Develop and operate a trading/market intelligence system focused on Trading with Machine Learning Classification and SVM.
 
-The guided workflow is:
+## What this repository currently contains
+Top-level structure:
+- `.gitignore` (file)
+- `app.py` (file)
+- `docs` (dir)
+- `examples` (dir)
+- `generate_demo.py` (file)
+- `Handoff projects` (dir)
+- `README.md` (file)
+- `regime_workshop` (dir)
+- `requirements.txt` (file)
+- `run_app.sh` (file)
+- `SCOUT_REGIME_PLAN.md` (file)
+- `SVM_HANDOFF.md` (file)
+- `tests` (dir)
 
-**Add strategy → Add data → Review examples → Train → Test → Export**
+Primary languages/tooling detected: Python (9), Markdown (5), Jupyter Notebook (1), Shell (1)
 
-The app prepares and tests regime-recognition models. It does not connect to a
-broker, place orders, size positions, or make trading decisions.
+Likely key implementation files:
+- `app.py`
+- `README.md`
 
-## Run locally
+## Quickstart (operator + LLM friendly)
+Use this sequence first, then adapt to repo-specific details.
 
-Requirements: Python 3.10 or newer.
+1. Clone and enter repo:
+   ```bash
+   git clone https://github.com/monty313/-Trading-with-Machine-Learning-Classification-and-SVM.git
+   cd -Trading-with-Machine-Learning-Classification-and-SVM
+   ```
+2. Setup environment/dependencies:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+3. Run locally:
+   ```bash
+   python main.py  # adjust to project entrypoint
+   ```
+4. Validate changes:
+   ```bash
+   pytest -q
+   ```
 
-```sh
-python -m venv .venv
-. .venv/bin/activate
-python -m pip install -r requirements.txt
-./run_app.sh
-```
+## Operating intent (CEO-mode guide for future LLMs)
+When continuing this project, optimize for business outcome first:
 
-Open the local URL printed by Streamlit. Configuration and reviewed examples
-are saved under the ignored `workshop_data/` directory. Add at least one
-strategy before importing data.
+- Preserve or improve strategy quality, reliability, and reproducibility.
+- Prefer small, testable, reversible changes over broad rewrites.
+- Keep docs synchronized with code behavior.
+- Add explicit assumptions, constraints, and success criteria in every major change.
 
-## Try the synthetic demo
+## Delivery checklist
+- [ ] Environment setup is deterministic.
+- [ ] Primary run path is documented and works.
+- [ ] Validation/test path is documented and works.
+- [ ] Key risks and TODOs are tracked in the handoff file.
 
-Create a deterministic, artificial OHLCV file:
-
-```sh
-python generate_demo.py /tmp/regime-demo.csv
-```
-
-In the app, add a regime and strategy using **Set 2**, with a simple condition
-such as `anchor__return_1 >= 0.0001`. In **Add data**, upload
-`/tmp/regime-demo.csv` and confirm the preview. In **Review examples**, review
-both active suggestions and some non-matches as inactive; non-matches begin as
-unknown and are never treated as negatives without review. Train and inspect
-the holdout report, then export a uniquely named bundle.
-
-The demo is synthetic software test data, not market evidence or a claim of
-generalization.
-
-Run the focused tests with:
-
-```sh
-python -m unittest discover -s tests -v
-```
-
-See [the architecture and limitations](docs/architecture.md) for the supported
-CSV schema, data flow, and what remains unvalidated. Python bundle consumers can
-start from [`examples/consumer.py`](examples/consumer.py), passing a JSON object
-with `observations` and `context` keys from the repository root, for example
-with `python -m examples.consumer /path/to/bundle '<JSON>'`. Include all
-features listed in the bundle manifest.
+## Branch and release notes
+- Default branch: `main`
+- Keep PRs focused and attach proof-of-run or proof-of-test for behavior changes.
